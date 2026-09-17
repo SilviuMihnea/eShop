@@ -3,6 +3,7 @@
 public record CatalogItem(
     int Id,
     string Name,
+    string? Model,
     string Description,
     decimal Price,
     string PictureUrl,
