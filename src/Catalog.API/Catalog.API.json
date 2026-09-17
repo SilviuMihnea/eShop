@@ -642,7 +642,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "The name or model of the item to return",
+            "description": "The name of the item to return",
             "required": true,
             "schema": {
               "minLength": 1,
@@ -1054,12 +1054,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "model": {
-            "type": [
-              "null",
-              "string"
-            ]
           },
           "description": {
             "type": [

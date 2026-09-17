@@ -18,12 +18,6 @@
             <p>
                 Brand: <strong>@item.CatalogBrand?.Brand</strong>
             </p>
-            @if (!string.IsNullOrWhiteSpace(item.Model))
-            {
-                <p>
-                    Model: <strong>@item.Model</strong>
-                </p>
-            }
             <form class="add-to-cart" >
                 <span class="price">$@item.Price.ToPriceDisplay()</span>
             </form>
