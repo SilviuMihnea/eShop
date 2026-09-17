@@ -130,7 +130,7 @@ public static class CatalogApi
     public static async Task<Ok<PaginatedItems<CatalogItem>>> GetAllItems(
         [AsParameters] PaginationRequest paginationRequest,
         [AsParameters] CatalogServices services,
-        [Description("The name of the item to return")] string? name,
+        [Description("The name or model of the item to return")] string? name,
         [Description("The types of items to return. Repeat the parameter to filter by multiple types.")] int[]? type,
         [Description("The brands of items to return. Repeat the parameter to filter by multiple brands.")] int[]? brand)
     {
@@ -141,7 +141,7 @@ public static class CatalogApi
 
         if (name is not null)
         {
-            root = root.Where(c => c.Name.StartsWith(name));
+            root = root.Where(c => c.Name.StartsWith(name) || (c.Model != null && c.Model.StartsWith(name)));
         }
         if (type is { Length: > 0 })
         {
@@ -239,7 +239,7 @@ public static class CatalogApi
     public static async Task<Ok<PaginatedItems<CatalogItem>>> GetItemsByName(
         [AsParameters] PaginationRequest paginationRequest,
         [AsParameters] CatalogServices services,
-        [Description("The name of the item to return")] string name)
+        [Description("The name or model of the item to return")] string name)
     {
         return await GetAllItems(paginationRequest, services, name, null, null);
     }
@@ -417,6 +417,7 @@ public static class CatalogApi
             Id = product.Id,
             CatalogBrandId = product.CatalogBrandId,
             CatalogTypeId = product.CatalogTypeId,
+            Model = product.Model,
             Description = product.Description,
             PictureFileName = product.PictureFileName,
             Price = product.Price,
