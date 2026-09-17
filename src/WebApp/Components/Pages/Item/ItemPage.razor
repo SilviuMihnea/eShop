@@ -34,6 +34,11 @@
                 <dl class="item-meta">
                     <dt>Brand</dt>
                     <dd>@item.CatalogBrand?.Brand</dd>
+                    @if (!string.IsNullOrWhiteSpace(item.Model))
+                    {
+                        <dt>Model</dt>
+                        <dd>@item.Model</dd>
+                    }
                 </dl>
 
                 <form class="add-to-cart" method="post" @formname="add-to-cart" @onsubmit="@AddToCartAsync" data-enhance="@isLoggedIn">

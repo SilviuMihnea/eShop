@@ -72,5 +72,5 @@ public sealed class CatalogAI : ICatalogAI
         return null;
     }
 
-    private static string CatalogItemToString(CatalogItem item) => $"{item.Name} {item.Description}";
+    private static string CatalogItemToString(CatalogItem item) => $"{item.Name} {item.Model} {item.Description}";
 }
