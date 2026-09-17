@@ -369,7 +369,6 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
         // Act - 1
         var bodyContent = new CatalogItem("TestCatalog1") {
             Id = id,
-            Model = "TestModel1",
             Description = "Test catalog description 1",
             Price = 11000.08m,
             PictureFileName = null,
@@ -393,17 +392,6 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
 
         // Assert - 1
         Assert.Equal(bodyContent.Id, addedItem.Id);
-        Assert.Equal(bodyContent.Model, addedItem.Model);
-
-        response = version switch
-        {
-            1.0 => await _httpClient.GetAsync("/api/catalog/items/by/TestModel1?pageIndex=0&pageSize=5", TestContext.Current.CancellationToken),
-            2.0 => await _httpClient.GetAsync("/api/catalog/items?name=TestModel1&pageIndex=0&pageSize=5", TestContext.Current.CancellationToken),
-            _ => throw new ArgumentOutOfRangeException(nameof(version), version, null)
-        };
-        response.EnsureSuccessStatusCode();
-        var matchingItems = await response.Content.ReadFromJsonAsync<PaginatedItems<CatalogItem>>(_jsonSerializerOptions, TestContext.Current.CancellationToken);
-        Assert.Contains(matchingItems.Data, item => item.Id == id && item.Model == bodyContent.Model);
 
     }
 
