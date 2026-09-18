@@ -20,6 +20,7 @@
     "Type": "Ski/boarding",
     "Brand": "WildRunner",
     "Name": "Alpine Fusion Goggles",
+    "Model": "Fusion G3",
     "Description": "Enhance your skiing experience with the Alpine Fusion Goggles from WildRunner. These goggles offer full UV protection and anti-fog lenses to keep your vision clear on the slopes. With their stylish silver frame and orange lenses, you'll stand out from the crowd. Adjustable straps ensure a secure fit, while the soft foam padding provides comfort all day long.",
     "Price": 79.99
   },
@@ -36,6 +37,7 @@
     "Type": "Ski/boarding",
     "Brand": "B&R",
     "Name": "Blizzard Rider Snowboard",
+    "Model": "Rider X5",
     "Description": "Get ready to ride the slopes with the Blizzard Rider Snowboard by B&R. This versatile snowboard is perfect for riders of all levels with its medium flex and twin shape. Its black and blue color scheme gives it a sleek and cool look. Whether you're carving turns or hitting the terrain park, this snowboard will help you shred with confidence.",
     "Price": 299.99
   },
@@ -140,6 +142,7 @@
     "Type": "Climbing",
     "Brand": "Grolltex",
     "Name": "Alpine Tech Crampons",
+    "Model": "Tech Crampon 18",
     "Description": "The Alpine Tech Crampons by Grolltex are essential for icy and challenging mountain terrains. Made from strong and lightweight stainless steel, these crampons provide excellent traction and stability. Their simple adjustment system allows for easy fitting and quick attachment to most hiking boots. Available in silver, they are suitable for both beginners and experienced mountaineers.",
     "Price": 149.00
   },
@@ -220,6 +223,7 @@
     "Type": "Jackets",
     "Brand": "Solstix",
     "Name": "Alpine Peak Down Jacket",
+    "Model": "Peak Down 28",
     "Description": "The Solstix Alpine Peak Down Jacket is crafted for extreme cold conditions. With its bold red color and sleek design, this jacket combines style with functionality. Made with high-quality goose down insulation, the Alpine Peak Jacket provides exceptional warmth and comfort. The jacket features a removable hood, adjustable cuffs, and multiple zippered pockets for storage. Conquer the harshest weather with the Solstix Alpine Peak Down Jacket.",
     "Price": 249.99
   },
@@ -388,6 +392,7 @@
     "Type": "Jackets",
     "Brand": "Daybird",
     "Name": "Arctic Shield Insulated Jacket",
+    "Model": "Shield 49",
     "Description": "Stay warm and stylish in the Arctic Shield Insulated Jacket by Daybird. This jacket features a water-resistant outer shell, insulated fill for exceptional warmth, and a detachable hood for added versatility. The sleek pink color is perfect for any outdoor occasion.",
     "Price": 169.99
   },
@@ -396,6 +401,7 @@
     "Type": "Navigation",
     "Brand": "AirStrider",
     "Name": "Astro GPS Navigator",
+    "Model": "Astro Nav 50",
     "Description": "Never get lost on your outdoor adventures with the Astro GPS Navigator by AirStrider. This compact and rugged device comes loaded with topographic maps, GPS tracking, waypoint storage, and a long-lasting battery. It is equipped with a high-resolution color display for easy navigation in any lighting condition. Available in a sleek gray color.",
     "Price": 249.99
   },
@@ -452,6 +458,7 @@
     "Type": "Footwear",
     "Brand": "Zephyr",
     "Name": "Ascend XT Trail Running Shoes",
+    "Model": "Ascend XT 57",
     "Description": "Take on any trail with confidence in the Ascend XT Trail Running Shoes in charcoal gray. These lightweight yet rugged shoes offer excellent grip and support, thanks to their durable rubber outsole and advanced cushioning technology. The breathable mesh upper keeps your feet cool when the adventure heats up. It's time to push your limits and conquer the great outdoors.",
     "Price": 109.99
   },
@@ -620,6 +627,7 @@
     "Type": "Bags",
     "Brand": "Solstix",
     "Name": "Basecamp Duffle Bag",
+    "Model": "Basecamp 78",
     "Description": "The Basecamp Duffle Bag by Solstix is the ultimate adventure companion. This spacious bag is made from durable nylon and features multiple compartments for optimal organization. Its sleek red design with gray accents exudes both style and functionality.",
     "Price": 129.00
   },
@@ -660,6 +668,7 @@
     "Type": "Ski/boarding",
     "Brand": "Zephyr",
     "Name": "Blizzard Freestyle Snowboard",
+    "Model": "Freestyle 83",
     "Description": "Unleash your freestyle skills on the slopes with the Blizzard snowboard from Zephyr. Featuring a vibrant orange and black design, this snowboard is perfect for riders who crave speed and control. Constructed with a durable bamboo core and carbon fiber reinforcement, the Blizzard offers an optimal blend of flexibility and responsiveness.",
     "Price": 379.00
   },
@@ -700,6 +709,7 @@
     "Type": "Bags",
     "Brand": "Green Equipment",
     "Name": "Alpine AlpinePack Backpack",
+    "Model": "AlpinePack 45",
     "Description": "The AlpinePack backpack by Green Equipment is your ultimate companion for outdoor adventures. This versatile and durable backpack features a sleek navy design with reinforced straps. With a capacity of 45 liters, multiple compartments, and a hydration pack sleeve, it offers ample storage and organization. The ergonomic back panel ensures maximum comfort, even on the most challenging treks.",
     "Price": 129.00
   },
@@ -732,6 +742,7 @@
     "Type": "Ski/boarding",
     "Brand": "Daybird",
     "Name": "Blizzard Snowboard",
+    "Model": "Blizzard 92",
     "Description": "Take on the slopes with the Daybird Blizzard Snowboard. This powerful board features a sleek design in icy white, with a durable wood core, a versatile medium flex, and a precision base that allows for smooth rides and easy turns. Strap on and carve your way to glory.",
     "Price": 449.99
   },
@@ -756,6 +767,7 @@
     "Type": "Cycling",
     "Brand": "AirStrider",
     "Name": "AeroLite Cycling Helmet",
+    "Model": "AeroLite C2",
     "Description": "Stay safe and stylish on your cycling adventures with the AirStrider AeroLite Cycling Helmet. This helmet, in a glossy grey, features a lightweight design, adjustable straps, and excellent ventilation to keep you cool. The aerodynamic shape reduces air resistance, enabling you to pick up speed with confidence.",
     "Price": 129.99
   },
@@ -788,6 +800,7 @@
     "Type": "Navigation",
     "Brand": "Solstix",
     "Name": "Adventurer GPS Watch",
+    "Model": "Adventurer X1",
     "Description": "Take navigation to the next level with the Solstix Adventurer GPS Watch. This sleek and durable watch, in midnight blue, features a built-in GPS, altimeter, and compass, allowing you to track your routes and monitor your progress. With multiple sport modes, it's the ideal companion for outdoor enthusiasts.",
     "Price": 199.99
   },
