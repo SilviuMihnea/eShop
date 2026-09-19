@@ -421,6 +421,13 @@ public static class CatalogApi
         var catalogEntry = services.Context.Entry(catalogItem);
         catalogEntry.CurrentValues.SetValues(productToUpdate);
 
+        // CatalogItem doubles as this endpoint's request body, so SetValues copies every
+        // property from the payload - including ReservedStock, which clients cannot send and
+        // which would therefore arrive as zero and wipe any outstanding holds.
+        var reservedStock = catalogEntry.Property(i => i.ReservedStock);
+        reservedStock.CurrentValue = reservedStock.OriginalValue;
+        reservedStock.IsModified = false;
+
         catalogItem.Embedding = await services.CatalogAI.GetEmbeddingAsync(catalogItem);
 
         var priceEntry = catalogEntry.Property(i => i.Price);

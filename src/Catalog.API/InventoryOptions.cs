@@ -13,4 +13,11 @@ public class InventoryOptions
     /// How often expired reservations are swept up and released.
     /// </summary>
     public int ExpiryCheckSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// How many times reserving an order is retried when a concurrent order changes the same
+    /// product's stock. Once these are used up the order is rejected rather than risking an
+    /// oversell.
+    /// </summary>
+    public int MaxReservationAttempts { get; set; } = 3;
 }
