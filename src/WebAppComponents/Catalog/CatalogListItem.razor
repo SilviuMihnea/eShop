@@ -15,6 +15,10 @@
         </span>
         <span class='catalog-product-content'>
             <span class='name'>@Item.Name</span>
+            @if (!string.IsNullOrWhiteSpace(Item.Model))
+            {
+                <span class='model'>@Item.Model</span>
+            }
             <span class='price'>$@Item.Price.ToPriceDisplay()</span>
         </span>
     </a>

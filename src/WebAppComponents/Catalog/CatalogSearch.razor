@@ -49,6 +49,31 @@
                         }
                     </div>
                 </div>
+                @if (ShowModelFilter)
+                {
+                    <div class="catalog-search-group">
+                        <h3>Model</h3>
+                        <div class="catalog-search-group-tags">
+                            <a href="@ModelUri(null)"
+                               class="catalog-search-tag @(ModelActiveCount == 0 ? "active" : "")">
+                                <span>All</span>
+                                <span class="catalog-search-tag-count">@ModelCount(null)</span>
+                            </a>
+                            @foreach (var model in modelOptions)
+                            {
+                                var count = ModelCount(model);
+                                var isActive = IsModelActive(model);
+                                var isEmpty = count == 0 && !isActive;
+                                <a href="@ModelUri(model)"
+                                   class="catalog-search-tag @(isActive ? "active" : "") @(isEmpty ? "is-empty" : "")"
+                                   aria-disabled="@(isEmpty ? "true" : null)">
+                                    <span>@model</span>
+                                    <span class="catalog-search-tag-count">@count</span>
+                                </a>
+                            }
+                        </div>
+                    </div>
+                }
                 <div class="catalog-search-group">
                     <h3>Type</h3>
                     <div class="catalog-search-group-tags">
@@ -80,31 +105,59 @@
     IEnumerable<CatalogBrand>? catalogBrands;
     IEnumerable<CatalogItemType>? catalogItemTypes;
     CatalogFacets? facets;
+    IReadOnlyList<string> modelOptions = [];
 
     [Parameter] public int[]? BrandIds { get; set; }
     [Parameter] public int[]? TypeIds { get; set; }
+    [Parameter] public string[]? Models { get; set; }
 
     private IReadOnlyList<int> Brands => BrandIds ?? [];
     private IReadOnlyList<int> Types => TypeIds ?? [];
 
+    // The model facet is only offered within a brand selection, so a model left in the
+    // query string is ignored while no brand is selected. Without this an unreachable
+    // filter would keep narrowing the results with no way to see or clear it.
+    private IReadOnlyList<string> SelectedModels =>
+        Brands.Count > 0 && Models is { Length: > 0 } ? Models : [];
+
     private int BrandActiveCount => Brands.Count;
     private int TypeActiveCount => Types.Count;
+    private int ModelActiveCount => SelectedModels.Count;
 
-    bool HasActiveFilter => Brands.Count > 0 || Types.Count > 0;
-    int ActiveFilterCount => Brands.Count + Types.Count;
+    bool HasActiveFilter => Brands.Count > 0 || Types.Count > 0 || SelectedModels.Count > 0;
+    int ActiveFilterCount => Brands.Count + Types.Count + SelectedModels.Count;
 
     private bool IsBrandActive(int id) => Brands.Contains(id);
     private bool IsTypeActive(int id) => Types.Contains(id);
+    private bool IsModelActive(string model) => SelectedModels.Contains(model, StringComparer.OrdinalIgnoreCase);
+
+    private bool ShowModelFilter => Brands.Count > 0 && modelOptions.Count > 0;
 
     protected override async Task OnInitializedAsync()
     {
+        var effectiveModels = SelectedModels.Count > 0 ? SelectedModels.ToArray() : null;
         var brandsTask = CatalogService.GetBrands();
         var itemTypesTask = CatalogService.GetTypes();
-        var facetsTask = CatalogService.GetCatalogFacets(BrandIds, TypeIds);
+        var facetsTask = CatalogService.GetCatalogFacets(BrandIds, TypeIds, effectiveModels);
         await Task.WhenAll(brandsTask, itemTypesTask, facetsTask);
         catalogBrands = brandsTask.Result;
         catalogItemTypes = itemTypesTask.Result;
         facets = facetsTask.Result;
+
+        // Options come from the server-side facet aggregation, which scopes them to the
+        // active brand and type selection. A selected model is always included even when it
+        // has fallen out of that scope, so it stays visible and clearable rather than
+        // filtering invisibly.
+        var options = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var count in facets.ModelCounts)
+        {
+            options.Add(count.Model);
+        }
+        foreach (var model in SelectedModels)
+        {
+            options.Add(model);
+        }
+        modelOptions = [.. options];
     }
 
     // Contextual counts. Within a facet, selections are additive (OR / union); across
@@ -152,10 +205,34 @@
         return 0;
     }
 
+    private int ModelCount(string? model)
+    {
+        if (facets is null)
+        {
+            return 0;
+        }
+        if (model is null)
+        {
+            return facets.ModelTotal;
+        }
+        foreach (var count in facets.ModelCounts)
+        {
+            if (string.Equals(count.Model, model, StringComparison.OrdinalIgnoreCase))
+            {
+                return count.Count;
+            }
+        }
+        return 0;
+    }
+
+    // Changing the brand selection always clears the model filter: models belong to a brand,
+    // so carrying a selection across a brand change would leave a filter that the new
+    // brand's option list cannot explain.
     private string BrandUri(int? brandId) => Nav.GetUriWithQueryParameters(new Dictionary<string, object?>()
     {
         { "page", null },
         { "brand", ToggleValue(Brands, brandId) },
+        { "model", null },
     });
 
     private string TypeUri(int? typeId) => Nav.GetUriWithQueryParameters(new Dictionary<string, object?>()
@@ -164,11 +241,18 @@
         { "type", ToggleValue(Types, typeId) },
     });
 
+    private string ModelUri(string? model) => Nav.GetUriWithQueryParameters(new Dictionary<string, object?>()
+    {
+        { "page", null },
+        { "model", ToggleValue(SelectedModels, model) },
+    });
+
     private string ResetUri() => Nav.GetUriWithQueryParameters(new Dictionary<string, object?>()
     {
         { "page", null },
         { "brand", null },
         { "type", null },
+        { "model", null },
     });
 
     // A null id clears the facet ("All"). Otherwise toggle the id's membership in the
@@ -184,6 +268,20 @@
         int[] next = current.Contains(id.Value)
             ? current.Where(v => v != id.Value).ToArray()
             : [.. current, id.Value];
+
+        return next.Length == 0 ? null : next;
+    }
+
+    private static string[]? ToggleValue(IReadOnlyList<string> current, string? model)
+    {
+        if (model is null)
+        {
+            return null;
+        }
+
+        string[] next = current.Contains(model, StringComparer.OrdinalIgnoreCase)
+            ? current.Where(v => !string.Equals(v, model, StringComparison.OrdinalIgnoreCase)).ToArray()
+            : [.. current, model];
 
         return next.Length == 0 ? null : next;
     }
