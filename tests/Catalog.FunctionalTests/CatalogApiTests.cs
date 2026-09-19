@@ -369,6 +369,7 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
         // Act - 1
         var bodyContent = new CatalogItem("TestCatalog1") {
             Id = id,
+            Model = "TestModel1",
             Description = "Test catalog description 1",
             Price = 11000.08m,
             PictureFileName = null,
@@ -392,6 +393,17 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
 
         // Assert - 1
         Assert.Equal(bodyContent.Id, addedItem.Id);
+        Assert.Equal(bodyContent.Model, addedItem.Model);
+
+        response = version switch
+        {
+            1.0 => await _httpClient.GetAsync("/api/catalog/items/by/TestModel1?pageIndex=0&pageSize=5", TestContext.Current.CancellationToken),
+            2.0 => await _httpClient.GetAsync("/api/catalog/items?name=TestModel1&pageIndex=0&pageSize=5", TestContext.Current.CancellationToken),
+            _ => throw new ArgumentOutOfRangeException(nameof(version), version, null)
+        };
+        response.EnsureSuccessStatusCode();
+        var matchingItems = await response.Content.ReadFromJsonAsync<PaginatedItems<CatalogItem>>(_jsonSerializerOptions, TestContext.Current.CancellationToken);
+        Assert.Contains(matchingItems.Data, item => item.Id == id && item.Model == bodyContent.Model);
 
     }
 
@@ -465,5 +477,108 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
             TestContext.Current.CancellationToken);
         Assert.Empty(result!.Data);
         Assert.Equal(1000, result.PageIndex);
+    }
+
+    // The model filter is a v2-only query parameter: the v1 /items route takes no filters.
+    [Fact]
+    public async Task GetCatalogItemsFilteredByModel()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(2.0));
+
+        var response = await httpClient.GetAsync(
+            "/api/catalog/items?model=Everest+Line+3&pageIndex=0&pageSize=10",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<PaginatedItems<CatalogItem>>(
+            _jsonSerializerOptions,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Equal(3, result.Count);
+        Assert.All(result.Data, item => Assert.Equal("Everest Line 3", item.Model));
+    }
+
+    [Fact]
+    public async Task GetCatalogItemsFilteredByMultipleModelsUnionsThem()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(2.0));
+
+        var response = await httpClient.GetAsync(
+            "/api/catalog/items?model=Everest+Line+3&model=Apex+AH-7&pageIndex=0&pageSize=10",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<PaginatedItems<CatalogItem>>(
+            _jsonSerializerOptions,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Equal(4, result.Count);
+        Assert.All(result.Data, item => Assert.Contains(item.Model, new[] { "Everest Line 3", "Apex AH-7" }));
+    }
+
+    [Fact]
+    public async Task GetCatalogFacetsScopesModelsToSelectedBrand()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(2.0));
+
+        var brands = await httpClient.GetFromJsonAsync<CatalogBrand[]>(
+            "/api/catalog/catalogbrands",
+            _jsonSerializerOptions,
+            TestContext.Current.CancellationToken);
+        var brandId = brands!.Single(b => b.Brand == "Legend").Id;
+
+        var items = await httpClient.GetFromJsonAsync<PaginatedItems<CatalogItem>>(
+            $"/api/catalog/items?brand={brandId}&pageIndex=0&pageSize=100",
+            _jsonSerializerOptions,
+            TestContext.Current.CancellationToken);
+
+        var expected = items!.Data
+            .Where(i => i.Model is not null)
+            .GroupBy(i => i.Model!)
+            .Select(g => (Model: g.Key, Count: g.Count()))
+            .OrderBy(x => x.Model)
+            .ToList();
+
+        var facets = await httpClient.GetFromJsonAsync<CatalogFacets>(
+            $"/api/catalog/items/facets?brand={brandId}",
+            _jsonSerializerOptions,
+            TestContext.Current.CancellationToken);
+
+        var actual = facets!.ModelCounts
+            .Select(m => (m.Model, m.Count))
+            .OrderBy(x => x.Model)
+            .ToList();
+
+        // The model options offered for a brand are exactly that brand's models.
+        Assert.Equal(expected, actual);
+
+        // Clearing the model filter brings back the brand's items that have no model at
+        // all, so the total is every item in scope rather than the sum of the counts.
+        Assert.Equal(items.Count, (long)facets.ModelTotal);
+        Assert.True(facets.ModelTotal > actual.Sum(x => x.Count));
+    }
+
+    [Fact]
+    public async Task GetCatalogFacetsScopesBrandsToSelectedModel()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(2.0));
+
+        var brands = await httpClient.GetFromJsonAsync<CatalogBrand[]>(
+            "/api/catalog/catalogbrands",
+            _jsonSerializerOptions,
+            TestContext.Current.CancellationToken);
+        var brandId = brands!.Single(b => b.Brand == "Legend").Id;
+
+        var facets = await httpClient.GetFromJsonAsync<CatalogFacets>(
+            "/api/catalog/items/facets?model=Everest+Line+3",
+            _jsonSerializerOptions,
+            TestContext.Current.CancellationToken);
+
+        // Counts for the other facets intersect the active model selection.
+        var brandCount = Assert.Single(facets!.BrandCounts);
+        Assert.Equal(brandId, brandCount.Id);
+        Assert.Equal(3, brandCount.Count);
     }
 }

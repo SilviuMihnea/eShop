@@ -14,9 +14,9 @@ public class CatalogService(HttpClient httpClient) : ICatalogService
         return httpClient.GetFromJsonAsync<CatalogItem>(uri);
     }
 
-    public async Task<CatalogResult> GetCatalogItems(int pageIndex, int pageSize, int[]? brands, int[]? types)
+    public async Task<CatalogResult> GetCatalogItems(int pageIndex, int pageSize, int[]? brands, int[]? types, string[]? models)
     {
-        var uri = GetAllCatalogItemsUri(remoteServiceBaseUrl, pageIndex, pageSize, brands, types);
+        var uri = GetAllCatalogItemsUri(remoteServiceBaseUrl, pageIndex, pageSize, brands, types, models);
         var result = await httpClient.GetFromJsonAsync<CatalogResult>(uri);
         return result!;
     }
@@ -49,7 +49,7 @@ public class CatalogService(HttpClient httpClient) : ICatalogService
         return result!;
     }
 
-    public async Task<CatalogFacets> GetCatalogFacets(int[]? brands, int[]? types)
+    public async Task<CatalogFacets> GetCatalogFacets(int[]? brands, int[]? types, string[]? models)
     {
         var filterQs = string.Empty;
         if (types is { Length: > 0 })
@@ -60,13 +60,17 @@ public class CatalogService(HttpClient httpClient) : ICatalogService
         {
             filterQs += string.Join("&", brands.Select(b => $"brand={b}")) + "&";
         }
+        if (models is { Length: > 0 })
+        {
+            filterQs += string.Join("&", models.Select(m => $"model={HttpUtility.UrlEncode(m)}")) + "&";
+        }
 
         var uri = $"{remoteServiceBaseUrl}items/facets?{filterQs}".TrimEnd('&', '?');
         var result = await httpClient.GetFromJsonAsync<CatalogFacets>(uri);
         return result!;
     }
 
-    private static string GetAllCatalogItemsUri(string baseUri, int pageIndex, int pageSize, int[]? brands, int[]? types)
+    private static string GetAllCatalogItemsUri(string baseUri, int pageIndex, int pageSize, int[]? brands, int[]? types, string[]? models)
     {
         string filterQs = string.Empty;
 
@@ -77,6 +81,10 @@ public class CatalogService(HttpClient httpClient) : ICatalogService
         if (brands is { Length: > 0 })
         {
             filterQs += string.Join("&", brands.Select(b => $"brand={b}")) + "&";
+        }
+        if (models is { Length: > 0 })
+        {
+            filterQs += string.Join("&", models.Select(m => $"model={HttpUtility.UrlEncode(m)}")) + "&";
         }
 
         return $"{baseUri}items?{filterQs}pageIndex={pageIndex}&pageSize={pageSize}";

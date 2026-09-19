@@ -581,7 +581,7 @@
           {
             "name": "name",
             "in": "query",
-            "description": "The name of the item to return",
+            "description": "The name or model of the item to return",
             "schema": {
               "type": "string"
             }
@@ -837,6 +837,12 @@
           },
           "name": {
             "type": "string"
+          },
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "description": {
             "type": [
