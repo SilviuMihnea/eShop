@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 using Pgvector;
 
@@ -29,6 +30,23 @@ public class CatalogItem
 
     // Quantity in stock
     public int AvailableStock { get; set; }
+
+    /// <summary>
+    /// Units promised to orders that have not been paid for yet. These are still part of
+    /// <see cref="AvailableStock"/> — physical stock is only decremented when a reservation is
+    /// committed — so this is what stops the same unit being promised to two customers.
+    /// Not settable through the API: reservations are only created and settled by the
+    /// inventory reservation flow.
+    /// </summary>
+    [JsonIgnore]
+    public int ReservedStock { get; set; }
+
+    /// <summary>
+    /// Units that can still be promised to a new order.
+    /// </summary>
+    [NotMapped]
+    [JsonIgnore]
+    public int AvailableToPromise => AvailableStock - ReservedStock;
 
     // Available stock at which we should reorder
     public int RestockThreshold { get; set; }
@@ -104,5 +122,69 @@ public class CatalogItem
         this.OnReorder = false;
 
         return this.AvailableStock - original;
+    }
+
+    /// <summary>
+    /// Promises units to an order without taking them out of physical stock. Reserving is what
+    /// makes the stock check binding: between this call and the order being paid for, the units
+    /// are no longer available to anyone else.
+    /// </summary>
+    /// <param name="units">The number of units to hold. Must be greater than zero.</param>
+    public void Reserve(int units)
+    {
+        if (units <= 0)
+        {
+            throw new CatalogDomainException($"Units to reserve should be greater than zero, but was {units}");
+        }
+
+        if (units > AvailableToPromise)
+        {
+            throw new CatalogDomainException(
+                $"Insufficient stock for product item {Name}: {units} unit(s) requested, {AvailableToPromise} available to promise");
+        }
+
+        ReservedStock += units;
+    }
+
+    /// <summary>
+    /// Turns a hold into a sale: the units leave physical stock and stop being reserved.
+    /// </summary>
+    /// <param name="units">The number of previously reserved units to commit.</param>
+    public void CommitReservation(int units)
+    {
+        if (units <= 0)
+        {
+            throw new CatalogDomainException($"Units to commit should be greater than zero, but was {units}");
+        }
+
+        if (units > ReservedStock)
+        {
+            throw new CatalogDomainException(
+                $"Cannot commit {units} unit(s) of product item {Name}: only {ReservedStock} unit(s) are reserved");
+        }
+
+        ReservedStock -= units;
+        AvailableStock -= units;
+    }
+
+    /// <summary>
+    /// Gives a hold back so the units can be promised to someone else. Physical stock is
+    /// untouched, because a reservation never took any.
+    /// </summary>
+    /// <param name="units">The number of previously reserved units to release.</param>
+    public void ReleaseReservation(int units)
+    {
+        if (units <= 0)
+        {
+            throw new CatalogDomainException($"Units to release should be greater than zero, but was {units}");
+        }
+
+        if (units > ReservedStock)
+        {
+            throw new CatalogDomainException(
+                $"Cannot release {units} unit(s) of product item {Name}: only {ReservedStock} unit(s) are reserved");
+        }
+
+        ReservedStock -= units;
     }
 }
