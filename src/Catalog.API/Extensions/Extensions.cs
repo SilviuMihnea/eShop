@@ -35,6 +35,11 @@ public static class Extensions
         builder.Services.AddOptions<CatalogOptions>()
             .BindConfiguration(nameof(CatalogOptions));
 
+        builder.Services.AddOptions<InventoryOptions>()
+            .BindConfiguration(nameof(InventoryOptions));
+
+        builder.Services.AddScoped<IInventoryReservationService, InventoryReservationService>();
+
         if (builder.Configuration["OllamaEnabled"] is string ollamaEnabled && bool.Parse(ollamaEnabled))
         {
             builder.AddOllamaApiClient("embedding")
