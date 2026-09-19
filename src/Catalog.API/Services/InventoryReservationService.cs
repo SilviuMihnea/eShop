@@ -92,6 +92,25 @@ public sealed class InventoryReservationService(
     public Task<IReadOnlyList<SettledReservationLine>> ReleaseAsync(int orderId, CancellationToken cancellationToken = default)
         => SettleAsync(orderId, commit: false, cancellationToken);
 
+    public async Task<IReadOnlyList<int>> GetExpiredOrderIdsAsync(
+        DateTime asOf,
+        int maxOrders,
+        CancellationToken cancellationToken = default)
+    {
+        // Served by the (Status, ExpiresAt) index. Oldest holds first so a large backlog is
+        // drained in the order it became eligible, not by arbitrary order id.
+        return await catalogContext.InventoryReservations
+            .Where(reservation => reservation.Status == ReservationStatus.Reserved
+                && reservation.ExpiresAt <= asOf)
+            .GroupBy(reservation => reservation.OrderId)
+            .Select(group => new { OrderId = group.Key, ExpiresAt = group.Min(reservation => reservation.ExpiresAt) })
+            .OrderBy(row => row.ExpiresAt)
+            .ThenBy(row => row.OrderId)
+            .Take(maxOrders)
+            .Select(row => row.OrderId)
+            .ToListAsync(cancellationToken);
+    }
+
     /// <summary>
     /// Commits or releases every hold still outstanding for an order. Reservations that have
     /// already been settled are not loaded, which is what makes a redelivered payment or

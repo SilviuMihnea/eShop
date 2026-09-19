@@ -15,6 +15,12 @@ public class InventoryOptions
     public int ExpiryCheckSeconds { get; set; } = 60;
 
     /// <summary>
+    /// How many distinct orders one sweep will release at most. Caps the work a single tick can
+    /// do when a backlog of lapsed holds has built up.
+    /// </summary>
+    public int ExpirySweepBatchSize { get; set; } = 20;
+
+    /// <summary>
     /// How many times reserving an order is retried when a concurrent order changes the same
     /// product's stock. Once these are used up the order is rejected rather than risking an
     /// oversell.

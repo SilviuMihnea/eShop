@@ -58,4 +58,17 @@ public interface IInventoryReservationService
     /// </summary>
     /// <returns>What was released. Empty when there was nothing left to release.</returns>
     Task<IReadOnlyList<SettledReservationLine>> ReleaseAsync(int orderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds orders still holding stock whose hold has lapsed, oldest order first.
+    /// </summary>
+    /// <param name="asOf">The moment to judge expiry against.</param>
+    /// <param name="maxOrders">
+    /// How many orders to return at most, so one sweep of a large backlog cannot monopolise the
+    /// database.
+    /// </param>
+    Task<IReadOnlyList<int>> GetExpiredOrderIdsAsync(
+        DateTime asOf,
+        int maxOrders,
+        CancellationToken cancellationToken = default);
 }
