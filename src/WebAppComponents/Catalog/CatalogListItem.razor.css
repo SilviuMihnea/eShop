@@ -96,6 +96,11 @@
     text-align: left;
 }
 
+.catalog-product-content .model {
+    color: var(--color-muted);
+    font-size: 0.875rem;
+}
+
 .catalog-product-content .price {
     margin-left: auto;
     color: var(--color-ink);

@@ -68,6 +68,10 @@ namespace eShop.Catalog.API.Infrastructure.Migrations
                     b.Property<int>("MaxStockThreshold")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Model")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -92,6 +96,8 @@ namespace eShop.Catalog.API.Infrastructure.Migrations
                     b.HasIndex("CatalogTypeId");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("Model");
 
                     b.ToTable("Catalog", (string)null);
                 });

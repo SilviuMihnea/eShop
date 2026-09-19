@@ -79,15 +79,21 @@
                 Grid.Row="3"
                 Grid.Column="0"
                 Grid.ColumnSpan="2"
-                Text="{Binding CatalogItem.Description, Mode=OneWay}" />
+                Style="{StaticResource MediumSizeFontStyle}"
+                Text="{Binding CatalogItem.Model, Mode=OneWay}" />
             <Label
                 Grid.Row="4"
+                Grid.Column="0"
+                Grid.ColumnSpan="2"
+                Text="{Binding CatalogItem.Description, Mode=OneWay}" />
+            <Label
+                Grid.Row="5"
                 Grid.Column="0"
                 Text="{Binding CatalogItem.Price, StringFormat='{0:C2}', Mode=OneWay}"
                 VerticalTextAlignment="Center" />
 
             <Button
-                Grid.Row="4"
+                Grid.Row="5"
                 Grid.Column="1"
                 Margin="8"
                 BackgroundColor="White"

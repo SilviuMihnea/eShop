@@ -52,7 +52,7 @@ public static class CatalogApi
         api.MapGet("/items/facets", GetCatalogFacets)
             .WithName("GetCatalogFacets")
             .WithSummary("Get catalog facet counts")
-            .WithDescription("Get per-brand and per-type item counts for the current filter selection, used to drive the catalog filter badges without transferring every item to the client.")
+            .WithDescription("Get per-brand, per-type and per-model item counts for the current filter selection, used to drive the catalog filter badges without transferring every item to the client.")
             .WithTags("Items");
 
         // Routes for resolving catalog items using AI.
@@ -123,16 +123,17 @@ public static class CatalogApi
         [AsParameters] PaginationRequest paginationRequest,
         [AsParameters] CatalogServices services)
     {
-        return await GetAllItems(paginationRequest, services, null, null, null);
+        return await GetAllItems(paginationRequest, services, null, null, null, null);
     }
 
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     public static async Task<Ok<PaginatedItems<CatalogItem>>> GetAllItems(
         [AsParameters] PaginationRequest paginationRequest,
         [AsParameters] CatalogServices services,
-        [Description("The name of the item to return")] string? name,
+        [Description("The name or model of the item to return")] string? name,
         [Description("The types of items to return. Repeat the parameter to filter by multiple types.")] int[]? type,
-        [Description("The brands of items to return. Repeat the parameter to filter by multiple brands.")] int[]? brand)
+        [Description("The brands of items to return. Repeat the parameter to filter by multiple brands.")] int[]? brand,
+        [Description("The models of items to return. Repeat the parameter to filter by multiple models.")] string[]? model)
     {
         var pageSize = paginationRequest.PageSize;
         var pageIndex = paginationRequest.PageIndex;
@@ -141,7 +142,7 @@ public static class CatalogApi
 
         if (name is not null)
         {
-            root = root.Where(c => c.Name.StartsWith(name));
+            root = root.Where(c => c.Name.StartsWith(name) || (c.Model != null && c.Model.StartsWith(name)));
         }
         if (type is { Length: > 0 })
         {
@@ -150,6 +151,10 @@ public static class CatalogApi
         if (brand is { Length: > 0 })
         {
             root = root.Where(c => brand.Contains(c.CatalogBrandId));
+        }
+        if (model is { Length: > 0 })
+        {
+            root = root.Where(c => c.Model != null && model.Contains(c.Model));
         }
 
         var totalItems = await root
@@ -168,18 +173,23 @@ public static class CatalogApi
     public static async Task<Ok<CatalogFacets>> GetCatalogFacets(
         [AsParameters] CatalogServices services,
         [Description("The types the counts should be evaluated within. Repeat the parameter to include multiple types.")] int[]? type,
-        [Description("The brands the counts should be evaluated within. Repeat the parameter to include multiple brands.")] int[]? brand)
+        [Description("The brands the counts should be evaluated within. Repeat the parameter to include multiple brands.")] int[]? brand,
+        [Description("The models the counts should be evaluated within. Repeat the parameter to include multiple models.")] string[]? model)
     {
         var items = (IQueryable<CatalogItem>)services.Context.CatalogItems;
 
-        // Brand counts are evaluated against the active type filter, and type counts against
-        // the active brand filter. This mirrors the catalog's additive-within-facet,
-        // intersect-across-facet selection semantics so each badge previews the result of
-        // adding that option to the current selection.
+        // Each facet's counts are evaluated against the OTHER facets' active filters. This
+        // mirrors the catalog's additive-within-facet, intersect-across-facet selection
+        // semantics so each badge previews the result of adding that option to the current
+        // selection.
         var brandScope = items;
         if (type is { Length: > 0 })
         {
             brandScope = brandScope.Where(c => type.Contains(c.CatalogTypeId));
+        }
+        if (model is { Length: > 0 })
+        {
+            brandScope = brandScope.Where(c => c.Model != null && model.Contains(c.Model));
         }
         var brandCounts = await brandScope
             .GroupBy(c => c.CatalogBrandId)
@@ -191,16 +201,42 @@ public static class CatalogApi
         {
             typeScope = typeScope.Where(c => brand.Contains(c.CatalogBrandId));
         }
+        if (model is { Length: > 0 })
+        {
+            typeScope = typeScope.Where(c => c.Model != null && model.Contains(c.Model));
+        }
         var typeCounts = await typeScope
             .GroupBy(c => c.CatalogTypeId)
             .Select(g => new CatalogFacetCount(g.Key, g.Count()))
             .ToListAsync();
 
+        var modelScope = items;
+        if (brand is { Length: > 0 })
+        {
+            modelScope = modelScope.Where(c => brand.Contains(c.CatalogBrandId));
+        }
+        if (type is { Length: > 0 })
+        {
+            modelScope = modelScope.Where(c => type.Contains(c.CatalogTypeId));
+        }
+        var modelCounts = await modelScope
+            .Where(c => c.Model != null)
+            .GroupBy(c => c.Model!)
+            .Select(g => new CatalogModelFacetCount(g.Key, g.Count()))
+            .ToListAsync();
+
+        // Model is optional on a catalog item, so the model total cannot be derived by
+        // summing the per-model counts the way the brand and type totals are: clearing the
+        // model filter also brings back the items that have no model at all.
+        var modelTotal = await modelScope.CountAsync();
+
         return TypedResults.Ok(new CatalogFacets(
             brandCounts,
             typeCounts,
+            modelCounts,
             brandCounts.Sum(b => b.Count),
-            typeCounts.Sum(t => t.Count)));
+            typeCounts.Sum(t => t.Count),
+            modelTotal));
     }
 
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -239,9 +275,9 @@ public static class CatalogApi
     public static async Task<Ok<PaginatedItems<CatalogItem>>> GetItemsByName(
         [AsParameters] PaginationRequest paginationRequest,
         [AsParameters] CatalogServices services,
-        [Description("The name of the item to return")] string name)
+        [Description("The name or model of the item to return")] string name)
     {
-        return await GetAllItems(paginationRequest, services, name, null, null);
+        return await GetAllItems(paginationRequest, services, name, null, null, null);
     }
 
     [ProducesResponseType<byte[]>(StatusCodes.Status200OK, "application/octet-stream",
@@ -340,7 +376,7 @@ public static class CatalogApi
         [Description("The type of items to return")] int typeId,
         [Description("The brand of items to return")] int? brandId)
     {
-        return await GetAllItems(paginationRequest, services, null, [typeId], brandId is null ? null : [brandId.Value]);
+        return await GetAllItems(paginationRequest, services, null, [typeId], brandId is null ? null : [brandId.Value], null);
     }
 
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -349,7 +385,7 @@ public static class CatalogApi
         [AsParameters] CatalogServices services,
         [Description("The brand of items to return")] int? brandId)
     {
-        return await GetAllItems(paginationRequest, services, null, null, brandId is null ? null : [brandId.Value]);
+        return await GetAllItems(paginationRequest, services, null, null, brandId is null ? null : [brandId.Value], null);
     }
 
     public static async Task<Results<Created, BadRequest<ProblemDetails>, NotFound<ProblemDetails>>> UpdateItemV1(
@@ -417,6 +453,7 @@ public static class CatalogApi
             Id = product.Id,
             CatalogBrandId = product.CatalogBrandId,
             CatalogTypeId = product.CatalogTypeId,
+            Model = product.Model,
             Description = product.Description,
             PictureFileName = product.PictureFileName,
             Price = product.Price,
