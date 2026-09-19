@@ -3,10 +3,9 @@
 namespace eShop.Catalog.API.IntegrationEvents.EventHandling;
 
 public class OrderStatusChangedToAwaitingValidationIntegrationEventHandler(
-    CatalogContext catalogContext,
     IInventoryReservationService reservationService,
     ICatalogIntegrationEventService catalogIntegrationEventService,
-    IOptions<InventoryOptions> options,
+    StockConcurrencyRetry retry,
     ILogger<OrderStatusChangedToAwaitingValidationIntegrationEventHandler> logger) :
     IIntegrationEventHandler<OrderStatusChangedToAwaitingValidationIntegrationEvent>
 {
@@ -18,66 +17,45 @@ public class OrderStatusChangedToAwaitingValidationIntegrationEventHandler(
             .Select(orderStockItem => new ReservationRequest(orderStockItem.ProductId, orderStockItem.Units))
             .ToList();
 
-        var maxAttempts = Math.Max(1, options.Value.MaxReservationAttempts);
+        IntegrationEvent? resultEvent = null;
 
-        for (var attempt = 1; ; attempt++)
+        var reserved = await retry.TryExecuteAsync("reserve stock", @event.OrderId, async () =>
         {
-            try
-            {
-                var outcome = await reservationService.ReserveAsync(@event.OrderId, lines);
+            resultEvent = null;
 
-                IntegrationEvent resultEvent = outcome.Success
-                    ? new OrderStockConfirmedIntegrationEvent(@event.OrderId)
-                    : new OrderStockRejectedIntegrationEvent(
-                        @event.OrderId,
-                        [.. outcome.Lines.Select(line => new ConfirmedOrderStockItem(line.ProductId, line.Reserved))]);
+            var outcome = await reservationService.ReserveAsync(@event.OrderId, lines);
 
-                // Commits the held units, the reservation rows and the outbox entry together, so
-                // stock is never held without the order being told, or released without the hold.
-                await catalogIntegrationEventService.SaveEventAndCatalogContextChangesAsync(resultEvent);
-                await catalogIntegrationEventService.PublishThroughEventBusAsync(resultEvent);
+            resultEvent = outcome.Success
+                ? new OrderStockConfirmedIntegrationEvent(@event.OrderId)
+                : new OrderStockRejectedIntegrationEvent(
+                    @event.OrderId,
+                    [.. outcome.Lines.Select(line => new ConfirmedOrderStockItem(line.ProductId, line.Reserved))]);
 
-                return;
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                // Another order changed the same product's stock between our read and our write.
-                // Nothing was committed, so start over from fresh state.
-                catalogContext.ChangeTracker.Clear();
+            // Commits the held units, the reservation rows and the outbox entry together, so
+            // stock is never held without the order being told, or announced without being held.
+            await catalogIntegrationEventService.SaveEventAndCatalogContextChangesAsync(resultEvent);
+        });
 
-                if (attempt < maxAttempts)
-                {
-                    logger.LogWarning(ex,
-                        "Concurrent stock change while reserving order {OrderId}; retrying ({Attempt} of {MaxAttempts})",
-                        @event.OrderId, attempt, maxAttempts);
-                    continue;
-                }
+        if (!reserved)
+        {
+            // The order has to be told something. The event bus acknowledges messages even when
+            // a handler throws, so staying silent would leave the order awaiting validation
+            // forever. Rejecting is the safe direction: no units were secured.
+            logger.LogError(
+                "Could not secure stock for order {OrderId} under contention; rejecting it rather than risking an oversell",
+                @event.OrderId);
 
-                logger.LogError(ex,
-                    "Giving up reserving order {OrderId} after {MaxAttempts} attempt(s); rejecting the order rather than risking an oversell",
-                    @event.OrderId, maxAttempts);
+            var rejection = new OrderStockRejectedIntegrationEvent(
+                @event.OrderId,
+                [.. lines.Select(line => new ConfirmedOrderStockItem(line.ProductId, false))]);
 
-                await RejectAsync(@event, lines);
-                return;
-            }
+            await catalogIntegrationEventService.SaveEventAndCatalogContextChangesAsync(rejection);
+            await catalogIntegrationEventService.PublishThroughEventBusAsync(rejection);
+
+            return;
         }
-    }
 
-    /// <summary>
-    /// Rejects the order when the hold could not be secured under contention. The order has to be
-    /// told something: the event bus acknowledges messages even when a handler throws, so letting
-    /// the exception escape would leave the order waiting for validation forever.
-    /// </summary>
-    private async Task RejectAsync(
-        OrderStatusChangedToAwaitingValidationIntegrationEvent @event,
-        List<ReservationRequest> lines)
-    {
-        // We could not secure any of the lines, so none of them is reported as having stock.
-        var rejection = new OrderStockRejectedIntegrationEvent(
-            @event.OrderId,
-            [.. lines.Select(line => new ConfirmedOrderStockItem(line.ProductId, false))]);
-
-        await catalogIntegrationEventService.SaveEventAndCatalogContextChangesAsync(rejection);
-        await catalogIntegrationEventService.PublishThroughEventBusAsync(rejection);
+        // Non-null whenever the work committed.
+        await catalogIntegrationEventService.PublishThroughEventBusAsync(resultEvent!);
     }
 }

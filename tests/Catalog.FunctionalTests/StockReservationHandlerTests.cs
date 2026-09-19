@@ -1,6 +1,7 @@
 using System.Text.Json;
 using eShop.Catalog.API.Infrastructure;
 using eShop.Catalog.API.IntegrationEvents.Events;
+using eShop.Catalog.API.Model;
 using eShop.EventBus.Abstractions;
 using eShop.EventBus.Events;
 using eShop.IntegrationEventLogEF;
@@ -10,9 +11,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace eShop.Catalog.FunctionalTests;
 
 /// <summary>
-/// Covers the stock step of the order saga: the handler now takes a real hold on inventory
-/// instead of doing a read-only availability check, and the confirm/reject decision it publishes
-/// has to match what it actually held.
+/// Covers the stock steps of the order saga: validation now takes a real hold on inventory
+/// instead of doing a read-only availability check, and payment turns that hold into a sale.
+/// The confirm/reject decision and the committed quantities both have to match what was held.
 ///
 /// The handler is resolved the same way the event bus resolves it, so these tests also prove the
 /// subscription is wired. There is no RabbitMQ in this fixture, so the publish attempt inside the
@@ -39,6 +40,30 @@ public sealed class StockReservationHandlerTests : IClassFixture<CatalogApiFixtu
             lines.Select(line => new OrderStockItem(line.ProductId, line.Units)).ToList());
 
         await handler.Handle(@event);
+    }
+
+    /// <summary>Drives the payment side of the saga, which turns the hold into a sale.</summary>
+    private async Task HandlePaidAsync(int orderId, params (int ProductId, int Units)[] lines)
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredKeyedService<IIntegrationEventHandler>(
+            typeof(OrderStatusChangedToPaidIntegrationEvent));
+
+        var @event = new OrderStatusChangedToPaidIntegrationEvent(
+            orderId,
+            lines.Select(line => new OrderStockItem(line.ProductId, line.Units)).ToList());
+
+        await handler.Handle(@event);
+    }
+
+    private async Task<ReservationStatus?> GetReservationStatusAsync(int orderId, int productId)
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CatalogContext>();
+        var reservation = await context.InventoryReservations
+            .SingleOrDefaultAsync(r => r.OrderId == orderId && r.ProductId == productId,
+                TestContext.Current.CancellationToken);
+        return reservation?.Status;
     }
 
     private async Task SetStockAsync(int productId, int availableStock)
@@ -251,5 +276,94 @@ public sealed class StockReservationHandlerTests : IClassFixture<CatalogApiFixtu
         Assert.Equal(
             nameof(OrderStockRejectedIntegrationEvent),
             Assert.Single(await GetOutboxEventNamesAsync(secondOrder)));
+    }
+
+    [Fact]
+    public async Task PaymentCommitsTheHoldAndAnnouncesIt()
+    {
+        const int orderId = 9201;
+        const int productId = 41;
+        await SetStockAsync(productId, 10);
+
+        await HandleAsync(orderId, (productId, 3));
+        await HandlePaidAsync(orderId, (productId, 3));
+
+        var stock = await GetStockAsync(productId);
+        Assert.Equal(7, stock.AvailableStock);
+        Assert.Equal(0, stock.ReservedStock);
+        Assert.Equal(ReservationStatus.Committed, await GetReservationStatusAsync(orderId, productId));
+
+        var published = await GetOutboxEventNamesAsync(orderId);
+        Assert.Contains(nameof(OrderStockConfirmedIntegrationEvent), published);
+        Assert.Contains(nameof(InventoryReservationCommittedIntegrationEvent), published);
+    }
+
+    [Fact]
+    public async Task CommittedEventCarriesWhatWasActuallyHeld()
+    {
+        const int orderId = 9202;
+        const int productId = 42;
+        await SetStockAsync(productId, 10);
+
+        await HandleAsync(orderId, (productId, 2));
+        await HandlePaidAsync(orderId, (productId, 2));
+
+        var committed = Assert.Single(
+            await GetOutboxEventsAsync<InventoryReservationCommittedIntegrationEvent>(orderId));
+
+        var line = Assert.Single(committed.CommittedStockItems);
+        Assert.Equal(productId, line.ProductId);
+        Assert.Equal(2, line.Units);
+    }
+
+    [Fact]
+    public async Task PaymentRedeliveryDoesNotDecrementStockTwice()
+    {
+        const int orderId = 9203;
+        const int productId = 43;
+        await SetStockAsync(productId, 10);
+
+        await HandleAsync(orderId, (productId, 4));
+        await HandlePaidAsync(orderId, (productId, 4));
+        await HandlePaidAsync(orderId, (productId, 4));
+
+        Assert.Equal(6, (await GetStockAsync(productId)).AvailableStock);
+
+        // The second delivery finds nothing outstanding, so it announces nothing.
+        Assert.Single(await GetOutboxEventsAsync<InventoryReservationCommittedIntegrationEvent>(orderId));
+    }
+
+    /// <summary>
+    /// The quantities on the payment event are not trusted: what gets sold is what was held.
+    /// Before reservations existed this handler decremented whatever the event asked for.
+    /// </summary>
+    [Fact]
+    public async Task PaymentCommitsTheHeldQuantityNotTheQuantityOnTheEvent()
+    {
+        const int orderId = 9204;
+        const int productId = 44;
+        await SetStockAsync(productId, 10);
+
+        await HandleAsync(orderId, (productId, 2));
+        await HandlePaidAsync(orderId, (productId, 99));
+
+        Assert.Equal(8, (await GetStockAsync(productId)).AvailableStock);
+        Assert.Equal(0, (await GetStockAsync(productId)).ReservedStock);
+    }
+
+    [Fact]
+    public async Task PaymentForAnOrderWithNoHoldLeavesStockAlone()
+    {
+        const int orderId = 9205;
+        const int productId = 45;
+        await SetStockAsync(productId, 10);
+
+        // No validation step ran, so there is nothing to commit.
+        await HandlePaidAsync(orderId, (productId, 3));
+
+        var stock = await GetStockAsync(productId);
+        Assert.Equal(10, stock.AvailableStock);
+        Assert.Equal(0, stock.ReservedStock);
+        Assert.Empty(await GetOutboxEventsAsync<InventoryReservationCommittedIntegrationEvent>(orderId));
     }
 }

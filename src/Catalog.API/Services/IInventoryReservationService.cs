@@ -6,6 +6,9 @@ public readonly record struct ReservationRequest(int ProductId, int Units);
 /// <summary>Whether a single requested line could be held.</summary>
 public readonly record struct ReservationLineResult(int ProductId, bool Reserved);
 
+/// <summary>A hold that has just been settled, either committed or released.</summary>
+public readonly record struct SettledReservationLine(int ProductId, int Units);
+
 /// <summary>
 /// The result of trying to hold stock for a whole order. Reserving is all-or-nothing, so when
 /// <paramref name="Success"/> is false nothing was held and <paramref name="Lines"/> says which
@@ -44,12 +47,15 @@ public interface IInventoryReservationService
     /// Turns the order's held stock into sold stock: physical stock is decremented and the
     /// reservations are marked committed.
     /// </summary>
-    /// <returns>The number of reservations committed. Zero when there was nothing left to commit.</returns>
-    Task<int> CommitAsync(int orderId, CancellationToken cancellationToken = default);
+    /// <returns>
+    /// What was committed. Empty when there was nothing left to commit, which is how a
+    /// redelivered payment event is distinguished from a real one.
+    /// </returns>
+    Task<IReadOnlyList<SettledReservationLine>> CommitAsync(int orderId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gives the order's held stock back without touching physical stock.
     /// </summary>
-    /// <returns>The number of reservations released. Zero when there was nothing left to release.</returns>
-    Task<int> ReleaseAsync(int orderId, CancellationToken cancellationToken = default);
+    /// <returns>What was released. Empty when there was nothing left to release.</returns>
+    Task<IReadOnlyList<SettledReservationLine>> ReleaseAsync(int orderId, CancellationToken cancellationToken = default);
 }

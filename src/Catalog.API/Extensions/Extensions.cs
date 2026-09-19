@@ -39,6 +39,7 @@ public static class Extensions
             .BindConfiguration(nameof(InventoryOptions));
 
         builder.Services.AddScoped<IInventoryReservationService, InventoryReservationService>();
+        builder.Services.AddScoped<StockConcurrencyRetry>();
 
         if (builder.Configuration["OllamaEnabled"] is string ollamaEnabled && bool.Parse(ollamaEnabled))
         {

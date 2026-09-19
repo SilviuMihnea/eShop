@@ -86,10 +86,10 @@ public sealed class InventoryReservationService(
         return new ReservationOutcome(true, results);
     }
 
-    public Task<int> CommitAsync(int orderId, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<SettledReservationLine>> CommitAsync(int orderId, CancellationToken cancellationToken = default)
         => SettleAsync(orderId, commit: true, cancellationToken);
 
-    public Task<int> ReleaseAsync(int orderId, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<SettledReservationLine>> ReleaseAsync(int orderId, CancellationToken cancellationToken = default)
         => SettleAsync(orderId, commit: false, cancellationToken);
 
     /// <summary>
@@ -97,7 +97,7 @@ public sealed class InventoryReservationService(
     /// already been settled are not loaded, which is what makes a redelivered payment or
     /// cancellation event a no-op.
     /// </summary>
-    private async Task<int> SettleAsync(int orderId, bool commit, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<SettledReservationLine>> SettleAsync(int orderId, bool commit, CancellationToken cancellationToken)
     {
         var outstanding = await catalogContext.InventoryReservations
             .Where(reservation => reservation.OrderId == orderId
@@ -108,7 +108,7 @@ public sealed class InventoryReservationService(
         {
             logger.LogInformation(
                 "Order {OrderId} has no outstanding reservations to settle", orderId);
-            return 0;
+            return [];
         }
 
         var productIds = outstanding.Select(reservation => reservation.ProductId).ToList();
@@ -154,6 +154,7 @@ public sealed class InventoryReservationService(
             "{Action} {ReservationCount} reservation(s) for order {OrderId}",
             commit ? "Committed" : "Released", outstanding.Count, orderId);
 
-        return outstanding.Count;
+        return [.. outstanding.Select(reservation =>
+            new SettledReservationLine(reservation.ProductId, reservation.Units))];
     }
 }

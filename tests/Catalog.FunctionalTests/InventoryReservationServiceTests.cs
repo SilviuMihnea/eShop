@@ -153,7 +153,7 @@ public sealed class InventoryReservationServiceTests : IClassFixture<CatalogApiF
 
         var committed = await InScopeAsync((service, _) => service.CommitAsync(orderId, TestContext.Current.CancellationToken));
 
-        Assert.Equal(1, committed);
+        Assert.Equal(4, Assert.Single(committed).Units);
         var stock = await GetStockAsync(productId);
         Assert.Equal(6, stock.AvailableStock);
         Assert.Equal(0, stock.ReservedStock);
@@ -176,7 +176,7 @@ public sealed class InventoryReservationServiceTests : IClassFixture<CatalogApiF
 
         var again = await InScopeAsync((service, _) => service.CommitAsync(orderId, TestContext.Current.CancellationToken));
 
-        Assert.Equal(0, again);
+        Assert.Empty(again);
         Assert.Equal(7, (await GetStockAsync(productId)).AvailableStock);
     }
 
@@ -192,7 +192,7 @@ public sealed class InventoryReservationServiceTests : IClassFixture<CatalogApiF
 
         var released = await InScopeAsync((service, _) => service.ReleaseAsync(orderId, TestContext.Current.CancellationToken));
 
-        Assert.Equal(1, released);
+        Assert.Equal(4, Assert.Single(released).Units);
         var stock = await GetStockAsync(productId);
         Assert.Equal(10, stock.AvailableStock);
         Assert.Equal(0, stock.ReservedStock);
@@ -216,7 +216,7 @@ public sealed class InventoryReservationServiceTests : IClassFixture<CatalogApiF
         // A cancellation arriving after payment must find nothing outstanding.
         var released = await InScopeAsync((service, _) => service.ReleaseAsync(orderId, TestContext.Current.CancellationToken));
 
-        Assert.Equal(0, released);
+        Assert.Empty(released);
         Assert.Equal(8, (await GetStockAsync(productId)).AvailableStock);
     }
 
