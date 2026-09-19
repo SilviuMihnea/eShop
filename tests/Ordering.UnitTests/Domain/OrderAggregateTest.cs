@@ -175,4 +175,56 @@ public class OrderAggregateTest
         //Assert
         Assert.HasCount(expectedResult, fakeOrder.DomainEvents);
     }
+
+    private static Order AwaitingValidationOrder()
+    {
+        var order = new Order(
+            "1", "fakeName",
+            new Address("fakeStreet", "FakeCity", "fakeState", "fakeCountry", "FakeZipCode"),
+            cardTypeId: 5, cardNumber: "12", cardSecurityNumber: "123",
+            cardHolderName: "FakeName", cardExpiration: DateTime.UtcNow.AddYears(1));
+
+        order.AddOrderItem(1, "cup", 10.0m, 0, string.Empty, 2);
+        order.SetAwaitingValidationStatus();
+
+        // Drop the events raised while getting the order into position so the assertions only
+        // see what the rejection itself raises.
+        order.ClearDomainEvents();
+
+        return order;
+    }
+
+    [TestMethod]
+    public void Cancelling_a_stock_rejected_order_raises_the_cancelled_event()
+    {
+        //Arrange
+        var order = AwaitingValidationOrder();
+
+        //Act
+        order.SetCancelledStatusWhenStockIsRejected([1]);
+
+        //Assert
+        Assert.AreEqual(OrderStatus.Cancelled, order.OrderStatus);
+
+        // The event is what tells the customer and releases any inventory held for the order.
+        Assert.HasCount(1, order.DomainEvents);
+        Assert.IsInstanceOfType<OrderCancelledDomainEvent>(order.DomainEvents.Single());
+    }
+
+    [TestMethod]
+    public void Stock_rejection_is_ignored_once_the_order_has_moved_on()
+    {
+        //Arrange
+        var order = AwaitingValidationOrder();
+        order.SetStockConfirmedStatus();
+        order.ClearDomainEvents();
+
+        //Act
+        order.SetCancelledStatusWhenStockIsRejected([1]);
+
+        //Assert - a late rejection must not cancel an order whose stock was already confirmed,
+        //and must not raise an event that would release the hold.
+        Assert.AreEqual(OrderStatus.StockConfirmed, order.OrderStatus);
+        Assert.HasCount(0, order.DomainEvents);
+    }
 }

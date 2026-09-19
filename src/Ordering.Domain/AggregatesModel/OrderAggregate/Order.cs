@@ -164,6 +164,11 @@ public class Order
 
             var itemsStockRejectedDescription = string.Join(", ", itemsStockRejectedProductNames);
             Description = $"The product items don't have stock: ({itemsStockRejectedDescription}).";
+
+            // Raise the same event the other cancellation path raises. Without it this route out
+            // of the order never told anyone: the customer got no notification, and any inventory
+            // held for the order was never released.
+            AddDomainEvent(new OrderCancelledDomainEvent(this));
         }
     }
 

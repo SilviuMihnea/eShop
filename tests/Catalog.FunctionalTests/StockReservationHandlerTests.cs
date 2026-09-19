@@ -12,8 +12,9 @@ namespace eShop.Catalog.FunctionalTests;
 
 /// <summary>
 /// Covers the stock steps of the order saga: validation now takes a real hold on inventory
-/// instead of doing a read-only availability check, and payment turns that hold into a sale.
-/// The confirm/reject decision and the committed quantities both have to match what was held.
+/// instead of doing a read-only availability check, payment turns that hold into a sale, and
+/// cancellation gives it back. The confirm/reject decision, the committed quantities and the
+/// released quantities all have to match what was actually held.
 ///
 /// The handler is resolved the same way the event bus resolves it, so these tests also prove the
 /// subscription is wired. There is no RabbitMQ in this fixture, so the publish attempt inside the
@@ -54,6 +55,16 @@ public sealed class StockReservationHandlerTests : IClassFixture<CatalogApiFixtu
             lines.Select(line => new OrderStockItem(line.ProductId, line.Units)).ToList());
 
         await handler.Handle(@event);
+    }
+
+    /// <summary>Drives cancellation, which gives any outstanding hold back.</summary>
+    private async Task HandleCancelledAsync(int orderId)
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredKeyedService<IIntegrationEventHandler>(
+            typeof(OrderStatusChangedToCancelledIntegrationEvent));
+
+        await handler.Handle(new OrderStatusChangedToCancelledIntegrationEvent(orderId));
     }
 
     private async Task<ReservationStatus?> GetReservationStatusAsync(int orderId, int productId)
@@ -365,5 +376,104 @@ public sealed class StockReservationHandlerTests : IClassFixture<CatalogApiFixtu
         Assert.Equal(10, stock.AvailableStock);
         Assert.Equal(0, stock.ReservedStock);
         Assert.Empty(await GetOutboxEventsAsync<InventoryReservationCommittedIntegrationEvent>(orderId));
+    }
+
+    [Fact]
+    public async Task CancellationReleasesTheHoldWithoutChangingPhysicalStock()
+    {
+        const int orderId = 9301;
+        const int productId = 51;
+        await SetStockAsync(productId, 10);
+
+        await HandleAsync(orderId, (productId, 4));
+        await HandleCancelledAsync(orderId);
+
+        var stock = await GetStockAsync(productId);
+        Assert.Equal(10, stock.AvailableStock);
+        Assert.Equal(0, stock.ReservedStock);
+        Assert.Equal(ReservationStatus.Released, await GetReservationStatusAsync(orderId, productId));
+
+        var released = Assert.Single(
+            await GetOutboxEventsAsync<InventoryReservationReleasedIntegrationEvent>(orderId));
+        Assert.Equal(ReservationReleaseReason.Cancelled, released.Reason);
+        Assert.Equal(4, Assert.Single(released.ReleasedStockItems).Units);
+    }
+
+    [Fact]
+    public async Task ReleasedUnitsBecomeAvailableToAnotherOrder()
+    {
+        const int firstOrder = 9302;
+        const int secondOrder = 9303;
+        const int productId = 52;
+        await SetStockAsync(productId, 2);
+
+        await HandleAsync(firstOrder, (productId, 2));
+
+        // Everything is promised, so the second order cannot be satisfied.
+        await HandleAsync(secondOrder, (productId, 2));
+        Assert.Equal(0, await CountReservationsAsync(secondOrder));
+
+        await HandleCancelledAsync(firstOrder);
+
+        // The units are free again, so the same order succeeds on a later attempt.
+        await HandleAsync(secondOrder, (productId, 2));
+
+        Assert.Equal(1, await CountReservationsAsync(secondOrder));
+        Assert.Equal(2, (await GetStockAsync(productId)).ReservedStock);
+    }
+
+    /// <summary>
+    /// The race that the reservation status guards: money has been taken, so the units must stay
+    /// sold even if a cancellation turns up afterwards.
+    /// </summary>
+    [Fact]
+    public async Task CancellationAfterPaymentDoesNotClawBackSoldStock()
+    {
+        const int orderId = 9305;
+        const int productId = 53;
+        await SetStockAsync(productId, 10);
+
+        await HandleAsync(orderId, (productId, 3));
+        await HandlePaidAsync(orderId, (productId, 3));
+        await HandleCancelledAsync(orderId);
+
+        var stock = await GetStockAsync(productId);
+        Assert.Equal(7, stock.AvailableStock);
+        Assert.Equal(0, stock.ReservedStock);
+        Assert.Equal(ReservationStatus.Committed, await GetReservationStatusAsync(orderId, productId));
+        Assert.Empty(await GetOutboxEventsAsync<InventoryReservationReleasedIntegrationEvent>(orderId));
+    }
+
+    [Fact]
+    public async Task CancellationOfAStockRejectedOrderHasNothingToRelease()
+    {
+        const int orderId = 9306;
+        const int productId = 54;
+        await SetStockAsync(productId, 1);
+
+        // Rejected, so nothing was ever held.
+        await HandleAsync(orderId, (productId, 5));
+        await HandleCancelledAsync(orderId);
+
+        var stock = await GetStockAsync(productId);
+        Assert.Equal(1, stock.AvailableStock);
+        Assert.Equal(0, stock.ReservedStock);
+        Assert.Empty(await GetOutboxEventsAsync<InventoryReservationReleasedIntegrationEvent>(orderId));
+    }
+
+    [Fact]
+    public async Task CancellationRedeliveryReleasesOnlyOnce()
+    {
+        const int orderId = 9307;
+        const int productId = 55;
+        await SetStockAsync(productId, 10);
+
+        await HandleAsync(orderId, (productId, 2));
+        await HandleCancelledAsync(orderId);
+        await HandleCancelledAsync(orderId);
+
+        Assert.Equal(10, (await GetStockAsync(productId)).AvailableStock);
+        Assert.Equal(0, (await GetStockAsync(productId)).ReservedStock);
+        Assert.Single(await GetOutboxEventsAsync<InventoryReservationReleasedIntegrationEvent>(orderId));
     }
 }
