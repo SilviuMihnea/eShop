@@ -44,7 +44,7 @@ export default defineConfig({
     },
     {
       name: 'e2e tests without logged in',
-      testMatch: ['**/BrowseItemTest.spec.ts', '**/ModelFilterTest.spec.ts'],
+      testMatch: ['**/BrowseItemTest.spec.ts'],
     }
     // {
     //   name: 'chromium',

@@ -8,7 +8,7 @@
 <SectionContent SectionName="page-header-subtitle">Start the season with the latest in clothing and equipment.</SectionContent>
 
 <div class="catalog">
-    <CatalogSearch BrandIds="@BrandIds" TypeIds="@TypeIds" Models="@Models" />
+    <CatalogSearch BrandIds="@BrandIds" TypeIds="@TypeIds" />
 
     @if (catalogResult is null)
     {
@@ -159,9 +159,6 @@
     [SupplyParameterFromQuery(Name = "type")]
     public int[]? TypeIds { get; set; }
 
-    [SupplyParameterFromQuery(Name = "model")]
-    public string[]? Models { get; set; }
-
     CatalogResult? catalogResult;
 
     static IEnumerable<int> GetPageTokens(int totalPages, int current)
@@ -194,7 +191,6 @@
         { "page", null },
         { "brand", null },
         { "type", null },
-        { "model", null },
     });
 
     protected override async Task OnInitializedAsync()
@@ -203,11 +199,6 @@
             Page.GetValueOrDefault(1) - 1,
             PageSize,
             BrandIds,
-            TypeIds,
-            EffectiveModels);
+            TypeIds);
     }
-
-    // The model filter is only offered once a brand is selected, so a stale model in the
-    // query string must not keep narrowing the results after the brand is cleared.
-    private string[]? EffectiveModels => BrandIds is { Length: > 0 } ? Models : null;
 }

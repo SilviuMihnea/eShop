@@ -16,9 +16,9 @@ public class CatalogService(HttpClient httpClient) : ICatalogService
         return httpClient.GetFromJsonAsync(uri, CatalogJsonContext.Default.CatalogItem);
     }
 
-    public async Task<CatalogResult> GetCatalogItems(int pageIndex, int pageSize, int[]? brands, int[]? types, string[]? models)
+    public async Task<CatalogResult> GetCatalogItems(int pageIndex, int pageSize, int[]? brands, int[]? types)
     {
-        var uri = GetAllCatalogItemsUri(remoteServiceBaseUrl, pageIndex, pageSize, brands, types, models);
+        var uri = GetAllCatalogItemsUri(remoteServiceBaseUrl, pageIndex, pageSize, brands, types);
         var result = await httpClient.GetFromJsonAsync($"{uri}&api-version=2.0", CatalogJsonContext.Default.CatalogResult);
         return result!;
     }
@@ -51,7 +51,7 @@ public class CatalogService(HttpClient httpClient) : ICatalogService
         return result!;
     }
 
-    private static string GetAllCatalogItemsUri(string baseUri, int pageIndex, int pageSize, int[]? brands, int[]? types, string[]? models)
+    private static string GetAllCatalogItemsUri(string baseUri, int pageIndex, int pageSize, int[]? brands, int[]? types)
     {
         string filterQs = string.Empty;
 
@@ -62,10 +62,6 @@ public class CatalogService(HttpClient httpClient) : ICatalogService
         if (brands is { Length: > 0 })
         {
             filterQs += string.Join("&", brands.Select(b => $"brand={b}")) + "&";
-        }
-        if (models is { Length: > 0 })
-        {
-            filterQs += string.Join("&", models.Select(m => $"model={HttpUtility.UrlEncode(m)}")) + "&";
         }
 
         return $"{baseUri}items?{filterQs}pageIndex={pageIndex}&pageSize={pageSize}&api-version=2.0";
